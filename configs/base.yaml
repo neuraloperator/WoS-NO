@@ -1,0 +1,23 @@
+
+defaults:
+  - setup
+  - _self_
+  - optimizer: adam
+  - scheduler: reducelr
+  - dataset: linear_poisson2d
+  - logger: log
+  - loss: wos
+  - encoder: null
+  - model: gino
+  - solver: wos2d
+  - train: wos
+  # - launcher: joblib
+
+
+
+save_dir: exp/
+restore_path: null
+restore_epoch: null
+upload_ckpt_to_wandb: last # Choose between True / False / "last"
+plot_results: False
+num_threads:

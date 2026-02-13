@@ -1,0 +1,1 @@
+/usr/bin/c++ -fPIC -O3 -DNDEBUG -flto -shared  -o zombie.cpython-310-x86_64-linux-gnu.so CMakeFiles/zombie.dir/demo/demo.cpp.o  -Wl,-rpath,/home/hong/workspace/wos_gino/MCGINO/bindings/zombie_Laplace/build/gnu_11.4_cxx11_64_release gnu_11.4_cxx11_64_release/libtbb.so.12.16

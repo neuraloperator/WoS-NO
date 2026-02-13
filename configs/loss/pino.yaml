@@ -1,0 +1,8 @@
+_target_: src.losses.LinearPoissonEqnLoss
+interior_weight: 0.01
+boundary_weight: 1.
+diff_method: autograd
+# base_loss: 
+  # _target_: torch.nn.functional.mse_loss
+# base_loss: mse
+

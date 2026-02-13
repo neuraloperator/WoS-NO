@@ -1,0 +1,4 @@
+log: True
+eval_interval: 1
+log_output: False
+verbose: False

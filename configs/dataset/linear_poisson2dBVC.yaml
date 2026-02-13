@@ -1,0 +1,5 @@
+_target_: src.datasets.LinearPoisson2DDatasetBVC
+data_path:
+wos_config_path:
+n_train:
+n_test:

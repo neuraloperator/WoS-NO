@@ -1,0 +1,16 @@
+_target_: src.datasets.LinearPoisson2DDataset
+data_path: ./data/linear_poisson_2d.obj
+wos_config: ${solver}
+start_t: 4
+max_t: 4.1 # 1010
+n_train: 7000
+n_test: 3000 #[48]
+test_batch_sizes: [1] #16
+query_resolution: 108
+delta_t: 0.01
+n_steps: 1
+points_per_bc: 100
+padding: 1
+encode: True
+max_n_out: None # number of data points to take as a  fixed subset
+use_grad: ${train.use_grad}

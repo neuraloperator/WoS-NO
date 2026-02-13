@@ -1,0 +1,30 @@
+_target_: neuralop.models.gino.GINO
+
+in_channels: 5 # G
+out_channels: 1  # G
+res: False # TODO: This is always ignored in GINO from neural operator!
+gno_coord_dim: 3 # G
+gno_embed_channels: 16 # G
+gno_embed_max_positions: 600 # G
+gno_use_open3d: False
+in_gno_radius: 0.1 # G TODO: Change the name
+out_gno_radius: 0.1 # G
+gno_radius: 0.08
+in_gno_transform_type: linear # G
+out_gno_transform_type: linear # G
+in_gno_mlp_hidden_layers :  [80, 80, 80] # G
+out_gno_mlp_hidden_layers :  [80, 80] # G
+# in_gno_tanh: config.gino.in_gno_tanh # TODO: Remove this as this is not used!
+out_gno_tanh: None # G
+fno_n_modes: [20, 20, 20] # G
+fno_hidden_channels: 64 # G
+fno_lifting_channels: 64 # G
+fno_projection_channels: 64
+projection_channel_ratio: ${eval:"int(${model.fno_projection_channels}/${model.fno_hidden_channels})"} # TODO: This is very ad-hoc
+fno_n_layers: 2 # G
+fno_use_channel_mlp: True # TODO: Change the name
+fno_norm: group_norm # G
+fno_ada_in_features: 8 # G
+fno_rank: 0.8 # G
+fno_domain_padding: 0.0 # TODO: This is ignored in GINO from neural operator library
+fno_channel_mlp_expansion: 0.5 

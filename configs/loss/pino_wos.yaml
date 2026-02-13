@@ -1,0 +1,15 @@
+# PINO-WOS combined loss configuration
+_target_: neuralop.losses.WeightedSumLoss
+
+losses:
+  - _target_: src.losses.LinearPoissonEqnLoss
+    interior_weight: 0.01
+    boundary_weight: 10  
+    diff_method: autograd
+  #   base_loss: torch.nn.functional.mse_loss
+  - _target_: neuralop.losses.LpLoss
+    d: 2
+    p: 2 
+
+weights: [1.0, 1.0] 
+

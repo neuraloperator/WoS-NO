@@ -1,0 +1,41 @@
+datasetPath: ./data/linear_poisson_3d_gino.obj
+wost_data:
+  solverType: "wost"
+  solver:
+    boundaryCacheSize: 200
+    domainCacheSize: 200
+    nWalksForCachedSolutionEstimates: 1025
+    nWalksForCachedGradientEstimates: 1025
+    maxWalkLength: 1024
+    epsilonShell: 0.01
+    minStarRadius: 0.01
+    radiusClampForKernels: 0
+    ignoreDirichlet: false
+    ignoreNeumann: true
+    ignoreSource: false
+    nWalks: 10
+    setpsBeforeApplyingTikhonov: 1024
+    setpsBeforeUsingMaximalSpheres: 1024
+    disableGradientAntitheticVariates: false
+    disableGradientControlVariates: false
+    useCosineSamplingForDirectionalDerivatives: false
+    silhouettePrecision: 0.001
+    russianRouletteThreshold: 0.99
+    runSingleThreaded: true
+  scene:
+    boundary: "/home/hviswan/Documents/Neural-Monte-Carlo-Fluid-Simulation/src/3d/geometry.obj"
+    absorptionCoeff: 0.0
+    normalizeDomain: false
+    flipOrientation: false
+    isDoubleSided: false
+    isWatertight: false
+  output:
+    solutionFile: "./solutions/wost.png"
+    txtdir: "./solutions/"
+    gridRes: 300
+    boundaryDistanceMask: 0.001
+    saveDebug: true
+    saveColormapped: true
+    colormap: "viridis"
+    colormapMinVal: 0.0
+    colormapMaxVal: 1.0

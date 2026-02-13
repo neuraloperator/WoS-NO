@@ -1,0 +1,3 @@
+n_epochs: 1
+device: cuda
+use_grad: False

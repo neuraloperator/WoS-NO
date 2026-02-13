@@ -1,0 +1,2 @@
+_target_: neuralop.losses.LpLoss
+d: 3

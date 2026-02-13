@@ -1,0 +1,16 @@
+_target_: src.datasets.LinearPoisson3DDataset
+data_path: ./data/linear_poisson_3d_gino.obj
+wos_config: ${solver}
+n_train: 7000
+n_test: 3000
+strat_t: 4
+max_t: 4.1
+test_batch_sizes: [1]
+query_resolution: 108
+delta_t: 0.01
+n_steps: 1
+points_per_bc: 100
+padding: 1
+encode: True
+max_n_out: None
+use_grad: ${train.use_grad}

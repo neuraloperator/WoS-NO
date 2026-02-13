@@ -1,0 +1,10 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/home/hong/workspace/wos_gino/MCGINO/bindings/zombie_Laplace/build/deps/tbb/CMakeFiles/_CMakeLTOTest-C/src/main.c
+
