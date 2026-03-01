@@ -153,8 +153,8 @@ export PATH=$CUDA_HOME/bin:$PATH
 export LD_LIBRARY_PATH=$CUDA_HOME/lib64:$LD_LIBRARY_PATH
 ```
 
-[!WARNING]
-Important Config Note: Please search for the string ```hong``` in the codebase and replace corresponding directory paths with your local absolute paths before initiating training.
+> [!WARNING]
+> Important Config Note: Please search for the string ```hong``` in the codebase and replace corresponding directory paths with your local absolute paths before initiating training.
 
 Training in 2D
 To train the model on the 2D Linear Poisson dataset using the Walk-on-Spheres loss:
@@ -180,8 +180,8 @@ python -m scripts.main \
     train=wos3d \
     solver=wos3d
 ```
-[!NOTE]
-Regarding train=wos: Always pass the train=wos (or wos3d) flag if you do not want to compute the gradient with respect to inputs (BVC). Omitting it will result in significantly higher memory usage.
+> [!NOTE]
+> Regarding train=wos: Always pass the train=wos (or wos3d) flag if you do not want to compute the gradient with respect to inputs (BVC). Omitting it will result in significantly higher memory usage.
 
 🐛 Known Issues
 3D Stability: The 3D implementation has not been extensively tested and may require hyperparameter tuning.
