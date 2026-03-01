@@ -1,22 +1,42 @@
 <div align="center">
 
-# 🧠 WoS-NO: Walk-on-Spheres Neural Operator
+<div id="user-content-toc">
+  <ul align="center" style="list-style: none;">
+    <summary>
+      <h1>WoS-NO: Walk-on-Spheres Neural Operator</h1>
+    </summary>
+  </ul>
+</div>
 
-**Mesh-free, Data-free Training of Neural Operators via Monte Carlo Weak Supervision**
+<p align="center">
+  <em>Mesh-free, Data-free Training of Neural Operators via Monte Carlo Weak Supervision</em>
+</p>
 
-[![Python](https://img.shields.io/badge/Python-3.10-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
-[![PyTorch](https://img.shields.io/badge/PyTorch-2.6+-EE4C2C?style=for-the-badge&logo=pytorch&logoColor=white)](https://pytorch.org/)
-[![FEniCS](https://img.shields.io/badge/Solver-FEniCS-blue?style=for-the-badge)](https://fenicsproject.org/)
-[![WandB](https://img.shields.io/badge/Logging-WandB-orange?style=for-the-badge&logo=weightsandbiases&logoColor=white)](https://wandb.ai/)
-[![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
+<a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.10-598BE7?style=for-the-badge&logo=python&logoColor=white&labelColor=F0F0F0"/></a> &emsp;
+<a href="https://pytorch.org/"><img src="https://img.shields.io/badge/PyTorch-2.6%2B-EE4C2C?style=for-the-badge&logo=pytorch&logoColor=white&labelColor=F0F0F0"/></a> &emsp;
+<a href="https://fenicsproject.org/"><img src="https://img.shields.io/badge/Solver-FEniCS-00589F?style=for-the-badge&labelColor=F0F0F0"/></a> &emsp;
+<a href="https://wandb.ai/"><img src="https://img.shields.io/badge/Logging-WandB-FFBE00?style=for-the-badge&logo=weightsandbiases&logoColor=white&labelColor=F0F0F0"/></a> &emsp;
+<a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-4CAF50?style=for-the-badge&labelColor=F0F0F0"/></a>
 
-[**Get Data**](#-data) | [**Installation**](#-installation) | [**Usage**](#-usage)
+<br><br>
+<img src="assets/WosGino.png" width="800px" alt="WoS-GINO Pipeline"/>
+<br>
+<em>The WoS-NO Pipeline leveraging stochastic random walks for weak supervision.</em>
+<br><br>
+
+<div id="toc">
+  <ul align="center" style="list-style: none;">
+    <summary>
+      <h2><a href="#overview">Overview</a> &emsp; <a href="https://drive.google.com/drive/folders/1zaRLzJMytxhpC7bulmnKntqy9SuPArXt?usp=sharing">Data & Weights</a> &emsp; <a href="#quick-start">Quick Start</a></h2>
+    </summary>
+  </ul>
+</div>
 
 </div>
 
 ---
 
-## 📖 Abstract
+## 📖 Overview
 
 Training neural PDE solvers is often bottlenecked by expensive data generation or unstable physics-informed neural network (PINN) that involves challenging optimization landscapes due to higher-order derivatives. To tackle this issue, we propose an alternative approach using Monte Carlo approaches to estimate the solution to the PDE as a stochastic process for weak supervision during training.
 
@@ -133,7 +153,8 @@ export PATH=$CUDA_HOME/bin:$PATH
 export LD_LIBRARY_PATH=$CUDA_HOME/lib64:$LD_LIBRARY_PATH
 ```
 
-⚠️ Important Config Note: Please search for the username/string hong in the codebase and replace corresponding directory paths with your local absolute paths before training.
+[!WARNING]
+Important Config Note: Please search for the string ```hong``` in the codebase and replace corresponding directory paths with your local absolute paths before initiating training.
 
 Training in 2D
 To train the model on the 2D Linear Poisson dataset using the Walk-on-Spheres loss:
@@ -159,7 +180,8 @@ python -m scripts.main \
     train=wos3d \
     solver=wos3d
 ```
-Note regarding train=wos: Always pass the train=wos flag if you do not want to compute the gradient with respect to inputs (BVC), as omitting it will result in significantly higher memory usage.
+[!NOTE]
+Regarding train=wos: Always pass the train=wos (or wos3d) flag if you do not want to compute the gradient with respect to inputs (BVC). Omitting it will result in significantly higher memory usage.
 
 🐛 Known Issues
 3D Stability: The 3D implementation has not been extensively tested and may require hyperparameter tuning.
