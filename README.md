@@ -193,11 +193,11 @@ If you use this code for your research, please cite our work:
 
 ```Code snippet
 
-@article{wosno2025,
-  title={Walk-on-Spheres Neural Operator},
-  author={Your Name and Co-authors},
-  journal={arXiv preprint},
-  year={2025}
+@article{viswanath2026operator,
+  title={Operator Learning Using Weak Supervision from Walk-on-Spheres},
+  author={Viswanath, Hrishikesh and Nam, Hong Chul and Deng, Xi and Berner, Julius and Anandkumar, Anima and Bera, Aniket},
+  journal={arXiv preprint arXiv:2603.01193},
+  year={2026}
 }
 ```
 </div>
