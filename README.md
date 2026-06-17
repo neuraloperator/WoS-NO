@@ -183,6 +183,30 @@ python -m scripts.main \
 > [!NOTE]
 > Regarding train=wos: Always pass the train=wos (or wos3d) flag if you do not want to compute the gradient with respect to inputs (BVC). Omitting it will result in significantly higher memory usage.
 
+### BSDE Weak Supervision (Parabolic / Elliptic PDEs)
+
+The `bsde` loss provides an alternative weak-supervision target generated on the fly by simulating Euler–Maruyama SDE paths, ported from the [neural walk-on-spheres](https://github.com/bizoffermark/neural_wos) codebase. It supports two stochastic representations:
+
+* **Elliptic** (`mode=elliptic`): a hitting-time representation for screened Poisson / Laplace problems, analogous to the Walk-on-Spheres estimate.
+* **Parabolic** (`mode=parabolic`): a fixed-horizon Feynman–Kac representation that extends weak supervision to time-dependent PDEs, which the elliptic estimator cannot express.
+
+```Bash
+# Elliptic weak supervision with the BSDE loss
+python -m scripts.main \
+    loss=bsde \
+    model=gino \
+    dataset=linear_poisson2d \
+    train=wos \
+    solver=wos2d
+
+# Time-dependent (parabolic) supervision via Feynman–Kac
+python -m scripts.main \
+    loss=bsde loss.mode=parabolic loss.horizon=0.5 \
+    model=gino dataset=linear_poisson2d train=wos solver=wos2d
+```
+
+The SDE solver hyperparameters (`n_traj`, `time_step`, `sigma`, `horizon`) and the source/boundary definition (the `pde` block) live in `configs/loss/bsde.yaml`. The `solver=wos2d` group remains the dataset's geometry/estimate provider; the BSDE loss carries its own path simulator independently. A smaller `time_step` reduces the estimator's $O(\sqrt{\Delta t})$ boundary-overshoot bias at the cost of longer walks.
+
 🐛 Known Issues
 3D Stability: The 3D implementation has not been extensively tested and may require hyperparameter tuning.
 
