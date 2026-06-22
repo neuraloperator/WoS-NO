@@ -882,12 +882,18 @@ class BSDELoss(object):
         dim: int = 2,
         base_loss=F.mse_loss,
         boundary_first: bool = True,
+        value_fn=None,
     ):
         super().__init__()
         self.interior_weight = interior_weight
         self.boundary_weight = boundary_weight
         self.base_loss = base_loss
         self.boundary_first = boundary_first
+        # value function w(t, x) along the paths, required for *semilinear*
+        # (nonlinear) PDEs whose target is a nonlinear Feynman-Kac estimate
+        # (e.g. Allen-Cahn). Typically a detached pointwise wrapper around the
+        # model being trained, or a Picard iterate. Ignored for linear PDEs.
+        self.value_fn = value_fn
 
         if pde is None:
             pde = BoxPoissonPDE(n_dim=dim)
@@ -924,12 +930,18 @@ class BSDELoss(object):
         _, out_domain = self._split(out, num_boundary)
         coords_bound, coords_domain = self._split(output_queries, num_boundary)
 
+        # For a nonlinear (semilinear) PDE the target is a nonlinear
+        # Feynman-Kac estimate that needs w(s, X_s) along the paths; use the
+        # value function (model / Picard iterate). A per-call value_fn kwarg
+        # overrides the one set at construction.
+        value_fn = kwargs.get("value_fn", self.value_fn)
+
         # Build the BSDE target by simulating SDE paths from the interior
         # query points. Detach: gradient must flow only through the operator
         # output, exactly as the WoS weak-supervision target is detached.
         with torch.no_grad():
             target = self.solver.evaluate(
-                coords_domain.detach(), evaluate_mode=True
+                coords_domain.detach(), value_fn=value_fn, evaluate_mode=True
             ).to(out_domain.device)
         target = target.reshape(out_domain.shape)
 

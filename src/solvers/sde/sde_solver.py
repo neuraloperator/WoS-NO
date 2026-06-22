@@ -82,10 +82,23 @@ class SDESolver:
         xs: torch.Tensor,
         model: nn.Module = None,
         grad_and_model: Callable = None,
+        value_fn: Callable = None,
         return_std: bool = False,
         evaluate_mode: bool = True,
     ):
         """Estimate ``u`` at the query points ``xs`` (shape ``[N, d]``).
+
+        Parameters
+        ----------
+        value_fn : Callable, optional
+            value function ``w(s, X_s) ~= value_fn(s, x)`` evaluated along the
+            paths (signature ``(t: float, x: Tensor[N,d]) -> Tensor[N,1]``).
+            Required for *semilinear* (nonlinear) problems whose PDE exposes a
+            ``driver(t, x, y)``: the reaction integral
+            ``int f(s, X_s, w(s,X_s)) ds`` needs ``w`` along the path. For an
+            operator/Picard scheme this is the current model / iterate
+            prediction (detached). When the PDE is linear (no ``driver``) this
+            is ignored and the linear source ``domain_fn`` is used instead.
 
         Returns ``mu`` (``evaluate_mode=True``), ``(xs, mu)``
         (``evaluate_mode=False``), or ``(xs, mu, std)`` (``return_std=True``).
@@ -95,7 +108,7 @@ class SDESolver:
                 xs, model, grad_and_model, return_std, evaluate_mode
             )
         return self._evaluate_parabolic(
-            xs, model, grad_and_model, return_std, evaluate_mode
+            xs, model, grad_and_model, value_fn, return_std, evaluate_mode
         )
 
     # ------------------------------------------------------------------ #
@@ -161,10 +174,17 @@ class SDESolver:
     # ------------------------------------------------------------------ #
     # parabolic: fixed-horizon Feynman-Kac
     # ------------------------------------------------------------------ #
-    def _evaluate_parabolic(self, xs, model, grad_and_model, return_std, evaluate_mode):
+    def _evaluate_parabolic(
+        self, xs, model, grad_and_model, value_fn, return_std, evaluate_mode
+    ):
         n_sample, n_dim = xs.shape
         xs = xs.to(self.device)
         n_shard = max(self.n_traj // self.n_traj_max_per_shard, 1)
+
+        # A nonlinear (semilinear) PDE exposes a driver f(t, x, y); the reaction
+        # integral then needs the solution value along the path, supplied by
+        # value_fn. With no driver/value_fn we fall back to the linear source.
+        is_semilinear = value_fn is not None and hasattr(self.pde, "driver")
 
         val_mean = torch.zeros([n_sample, 1], device=self.device)
         val_mean2 = torch.zeros([n_sample, 1], device=self.device)
@@ -183,6 +203,7 @@ class SDESolver:
                 x_it.shape[0], dtype=torch.bool, device=self.device
             )
 
+            t = 0.0
             for _ in range(self.n_time_steps):
                 active = torch.logical_not(absorbed)
                 if active.sum() == 0:
@@ -200,12 +221,21 @@ class SDESolver:
                     if active.sum() == 0:
                         break
                 dW = torch.randn_like(x_it[active]) * self.time_step**0.5
-                # source integral over [t, T]
-                val[active] += self.time_step * self.pde.domain_fn(x_it[active])
+                # reaction / source integral over [t, T]
+                if is_semilinear:
+                    # nonlinear Feynman-Kac: int f(s, X_s, w(s, X_s)) ds, with
+                    # w along the path provided by value_fn(t, x) (model/iterate)
+                    y = value_fn(t, x_it[active])
+                    val[active] += self.time_step * self.pde.driver(
+                        t, x_it[active], y
+                    )
+                else:
+                    val[active] += self.time_step * self.pde.domain_fn(x_it[active])
                 if grad_and_model is not None:
                     grad, _ = grad_and_model(x_it[active])
                     val[active] -= self.sigma * (grad * dW).sum(dim=-1, keepdim=True)
                 x_it[active] += dW * self.sigma
+                t += self.time_step
 
             # terminal condition g at the horizon for paths still active
             active = torch.logical_not(absorbed)

@@ -79,6 +79,89 @@ class BasePDEEquation:
         raise NotImplementedError
 
 
+class SemilinearParabolicPDE(BasePDEEquation):
+    """Semilinear parabolic PDE in terminal-value (BSDE) form::
+
+        d_t w + (sigma^2 / 2) Laplacian(w) + f(t, x, w) = 0,   w(T, x) = g(x)
+
+    solved on the whole space (no lateral spatial boundary by default). The
+    nonlinear Feynman-Kac representation is
+
+        w(t, x) = E[ g(X_T) + int_t^T f(s, X_s, w(s, X_s)) ds ],   dX = sigma dW
+
+    which is a *plain* BSDE: the driver ``f`` depends on the value ``w`` (=Y)
+    only, not on its gradient (=Z), so no gradient/policy network is needed
+    (this is what distinguishes it from the forward-backward deep-BSDE/FBSDE
+    solver). The path value ``w(s, X_s)`` is supplied to the solver via
+    ``value_fn`` (the operator/MLP being trained, or a Picard iterate).
+
+    Subclasses override :meth:`driver` (the reaction f) and :meth:`bound_fn`
+    (the terminal data g).
+    """
+
+    is_time_dependent = True
+    is_semilinear = True
+
+    def __init__(
+        self,
+        n_dim: int,
+        stop_tol: float = 1e-3,
+        sigma: float = 2**0.5,
+        terminal_fn=None,
+    ) -> None:
+        super().__init__(n_dim=n_dim, stop_tol=stop_tol)
+        self.sigma = sigma
+        self._terminal_fn = terminal_fn
+
+    def driver(self, t: float, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
+        """Nonlinear reaction f(t, x, y). Default 0 recovers the linear heat eq."""
+        return torch.zeros_like(y)
+
+    def domain_fn(self, x: torch.Tensor) -> torch.Tensor:
+        # no explicit linear source by default (reaction lives in `driver`)
+        return torch.zeros([x.shape[0], 1], device=x.device)
+
+    def bound_fn(self, x: torch.Tensor) -> torch.Tensor:
+        if self._terminal_fn is not None:
+            return self._terminal_fn(x)
+        raise NotImplementedError("provide a terminal_fn or override bound_fn")
+
+    def get_closest_bound_fn(self, x: torch.Tensor):
+        # whole space: report an effectively infinite distance so the walker
+        # never absorbs early and always integrates the full time horizon
+        d = torch.full((x.shape[0],), 1e30, device=x.device)
+        return x, d
+
+
+class AllenCahnND(SemilinearParabolicPDE):
+    """Allen-Cahn benchmark from E, Han & Jentzen (2017), arXiv:1706.04702.
+
+        d_t u = Laplacian(u) + u - u^3,   u(0, x) = g(x),   x in R^d
+
+    Posed in terminal-value (BSDE) form via the time reversal t -> T - t::
+
+        d_t w + Laplacian(w) + (w - w^3) = 0,   w(T, x) = g(x)
+
+    so the diffusion is ``dX = sqrt(2) dW`` (sigma = sqrt(2), generator = Lap),
+    the driver is ``f(w) = w - w^3`` (depends on w only -> plain BSDE), and the
+    terminal data is ``g(x) = 1 / (2 + 0.4 ||x||^2)``.
+
+    Reference: with d = 100, T = 0.3, the benchmark value is u(0, 0) ~= 0.0528.
+    """
+
+    def __init__(
+        self, n_dim: int = 100, stop_tol: float = 1e-3, sigma: float = 2**0.5
+    ) -> None:
+        super().__init__(n_dim=n_dim, stop_tol=stop_tol, sigma=sigma)
+
+    def driver(self, t: float, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
+        return y - y**3
+
+    def bound_fn(self, x: torch.Tensor) -> torch.Tensor:
+        r2 = (x**2).sum(dim=-1, keepdim=True)
+        return 1.0 / (2.0 + 0.4 * r2)
+
+
 class BoxPoissonPDE(BasePDEEquation):
     """``-Delta u = f`` on a box ``[lo, hi]^d`` with Dirichlet data.
 

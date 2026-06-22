@@ -1,0 +1,26 @@
+# Nonlinear BSDE weak-supervision loss for the Allen-Cahn equation.
+#   d_t u = Laplacian(u) + u - u^3,   u(0,x) = g(x) = 1/(2 + 0.4||x||^2)
+# Terminal-value (BSDE) form via t -> T-t, solved by the *plain* nonlinear
+# Feynman-Kac representation (driver depends on u only, no Z/gradient network
+# -> not FBSDE). The path value w(s,X_s) is supplied by `value_fn` (the model
+# being trained, or a Picard iterate); set it from the training script.
+# Reference (E, Han & Jentzen 2017): d=100, T=0.3 -> u(0,0) ~= 0.0528.
+_target_: src.losses.BSDELoss
+
+interior_weight: 1.0
+boundary_weight: 0.0      # whole-space AC: no lateral Dirichlet boundary term
+
+mode: parabolic
+n_traj: 256               # Monte-Carlo paths per query point
+time_step: 0.015          # dt = T/N with N = 20 steps (paper)
+horizon: 0.3              # terminal time T
+sigma: 1.41421356         # sqrt(2): generator = Laplacian (dX = sqrt(2) dW)
+n_traj_max_per_shard: 256
+
+dim: 100
+boundary_first: true
+
+pde:
+  _target_: src.solvers.sde.AllenCahnND
+  n_dim: 100
+  sigma: 1.41421356
