@@ -162,6 +162,146 @@ class AllenCahnND(SemilinearParabolicPDE):
         return 1.0 / (2.0 + 0.4 * r2)
 
 
+class AllenCahnFamily(SemilinearParabolicPDE):
+    """A *parametric family* of Allen-Cahn instances for operator learning.
+
+        d_t w + (sigma^2 / 2) Laplacian(w) + lam * (w - w^3) = 0,  w(T, x) = g(x)
+
+    solved on the whole space (terminal-value / BSDE form), where each family
+    member is defined by:
+
+        * a terminal condition ``g``, a mixture of ``K`` radial bumps
+
+              g(x) = sum_k  amp_k / (offset_k + width_k * ||x - center_k||^2)
+
+          which generalises the single fixed profile ``1 / (2 + 0.4 ||x||^2)``
+          of :class:`AllenCahnND` (recovered by K=1, amp=1, offset=2, width=0.4,
+          center=0). Amplitudes are drawn large enough that ``g`` reaches ~1,
+          i.e. into the regime where the ``w^3`` term actually bites and the
+          problem is meaningfully nonlinear (not a disguised heat equation);
+
+        * a reaction strength ``lam`` scaling the nonlinear driver.
+
+    An operator is trained to regress ``g (and lam) -> w(0, .)``. The bump
+    parametrisation is a finite, exact description of ``g``, so it doubles as
+    the operator's branch/conditioning input via :meth:`param_vector`.
+
+    Works in any spatial dimension (only ``||x - center||`` is used), so the
+    same class backs the 2-D and 3-D training families.
+    """
+
+    def __init__(
+        self,
+        n_dim: int,
+        centers: torch.Tensor,
+        amps: torch.Tensor,
+        offsets: torch.Tensor,
+        widths: torch.Tensor,
+        lam: float = 1.0,
+        sigma: float = 2**0.5,
+        stop_tol: float = 1e-3,
+    ) -> None:
+        super().__init__(n_dim=n_dim, stop_tol=stop_tol, sigma=sigma)
+        # bump params: centers [K, d], amps/offsets/widths [K]
+        self.centers = torch.as_tensor(centers, dtype=torch.float32)
+        self.amps = torch.as_tensor(amps, dtype=torch.float32).reshape(-1)
+        self.offsets = torch.as_tensor(offsets, dtype=torch.float32).reshape(-1)
+        self.widths = torch.as_tensor(widths, dtype=torch.float32).reshape(-1)
+        self.lam = float(lam)
+        self.n_bumps = self.centers.shape[0]
+
+    def driver(self, t: float, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
+        return self.lam * (y - y**3)
+
+    def bound_fn(self, x: torch.Tensor) -> torch.Tensor:
+        # g(x) = sum_k amp_k / (offset_k + width_k ||x - c_k||^2)
+        centers = self.centers.to(x.device)            # [K, d]
+        amps = self.amps.to(x.device)                  # [K]
+        offsets = self.offsets.to(x.device)            # [K]
+        widths = self.widths.to(x.device)              # [K]
+        # ||x - c_k||^2 : [N, K]
+        diff = x.unsqueeze(1) - centers.unsqueeze(0)   # [N, K, d]
+        r2 = (diff**2).sum(dim=-1)                      # [N, K]
+        terms = amps / (offsets + widths * r2)         # [N, K]
+        return terms.sum(dim=-1, keepdim=True)         # [N, 1]
+
+    def param_vector(self) -> torch.Tensor:
+        """Flat parameter vector describing this instance (operator branch input).
+
+        Layout per bump: ``[amp, offset, width, center(d)]`` concatenated over
+        the K bumps, followed by ``[lam]``. Length ``K * (3 + d) + 1``.
+        """
+        per_bump = torch.cat(
+            [
+                self.amps.reshape(-1, 1),
+                self.offsets.reshape(-1, 1),
+                self.widths.reshape(-1, 1),
+                self.centers.reshape(self.n_bumps, self.n_dim),
+            ],
+            dim=-1,
+        ).reshape(-1)
+        return torch.cat([per_bump, torch.tensor([self.lam])])
+
+
+def sample_allen_cahn_family(
+    n_dim: int,
+    n_bumps=(1, 8),
+    amp_range: Tuple[float, float] = (0.4, 1.5),
+    offset_range: Tuple[float, float] = (1.8, 3.2),
+    width_range: Tuple[float, float] = (0.3, 1.2),
+    center_range: Tuple[float, float] = (-1.0, 1.0),
+    lam_range: Tuple[float, float] = (0.5, 2.0),
+    sigma: float = 2**0.5,
+    generator: torch.Generator = None,
+) -> AllenCahnFamily:
+    """Draw one random :class:`AllenCahnFamily` instance.
+
+    ``n_bumps`` may be a fixed ``int`` or an inclusive ``(lo, hi)`` range, in
+    which case the number of radial bumps is itself sampled per instance -- so
+    the family varies in the *structure* of ``g`` (how many features it has),
+    not just the bump parameters. Because the operator sees ``g`` sampled on a
+    point cloud (not the bump parameters), a variable bump count needs no change
+    to the operator.
+
+    Amplitude / offset ranges are chosen so the terminal ``g`` (single-bump
+    peak ``~ amp / offset``, mildly higher where bumps overlap) reaches ~0.8-1.1:
+    firmly into the nonlinear (``w^3``) regime -- at ``w~0.9`` the reaction
+    ``w - w^3`` is ~30% of ``w`` -- while keeping the solution below the
+    ``w = 1`` stable equilibrium, where the slow ``1/r^2`` tail of ``g`` would
+    otherwise make the whole-space value sensitive to the far field. With more
+    overlapping bumps the peak can climb, so the amplitude band is kept modest.
+    In this range the stochastic (BSDE) target and an independent FEM solve of
+    the equivalent forward IVP agree to a few percent (see
+    ``scripts/fem_crosscheck.py``).
+    """
+
+    def _u(lo, hi, shape):
+        return lo + (hi - lo) * torch.rand(shape, generator=generator)
+
+    if isinstance(n_bumps, (tuple, list)):
+        lo, hi = int(n_bumps[0]), int(n_bumps[1])
+        n_bumps = int(torch.randint(lo, hi + 1, (1,), generator=generator).item())
+
+    centers = _u(*center_range, (n_bumps, n_dim))
+    # normalise per-bump amplitude by (2/K)^0.75 (anchored so K=2 is unchanged):
+    # more bumps -> more, individually smaller features, so the solution stays
+    # in the controlled ~<=1 regime (p90 peak ~1.0) instead of climbing with the
+    # bump count. Empirically tuned to keep the FEM<->BSDE agreement.
+    amps = _u(*amp_range, (n_bumps,)) * (2.0 / n_bumps) ** 0.75
+    offsets = _u(*offset_range, (n_bumps,))
+    widths = _u(*width_range, (n_bumps,))
+    lam = float(_u(*lam_range, (1,)).item())
+    return AllenCahnFamily(
+        n_dim=n_dim,
+        centers=centers,
+        amps=amps,
+        offsets=offsets,
+        widths=widths,
+        lam=lam,
+        sigma=sigma,
+    )
+
+
 class BoxPoissonPDE(BasePDEEquation):
     """``-Delta u = f`` on a box ``[lo, hi]^d`` with Dirichlet data.
 

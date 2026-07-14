@@ -1,0 +1,53 @@
+[
+  {
+    "dim": 2,
+    "budget_s": 20,
+    "results": [
+      {
+        "method": "FEM-direct(n=61)",
+        "solve_s": 0.5,
+        "mesh_s": 0.2,
+        "err_fem": 0.0006920973137312103,
+        "err_bsde": 0.008778751725913025
+      },
+      {
+        "method": "BSDE-direct(picard,256)",
+        "solve_s": 0.5,
+        "err_fem": 0.011839546787086874,
+        "err_bsde": 0.00858675455674529
+      },
+      {
+        "method": "GINO+BSDE",
+        "pool_gen_s": 0.0,
+        "pool_mesh_s": 0.0,
+        "steps": 60,
+        "err_fem": 0.15151063981465995,
+        "err_bsde": 0.14745245990343392,
+        "history": [
+          {
+            "t": 20.1,
+            "step": 60,
+            "err_fem": 0.15151063981465995,
+            "err_bsde": 0.14745245990343392
+          }
+        ]
+      },
+      {
+        "method": "GINO+FEM",
+        "pool_gen_s": 10.0,
+        "pool_mesh_s": 3.7,
+        "steps": 66,
+        "err_fem": 0.3159753018990159,
+        "err_bsde": 0.31528958259150386,
+        "history": [
+          {
+            "t": 20.0,
+            "step": 66,
+            "err_fem": 0.3159753018990159,
+            "err_bsde": 0.31528958259150386
+          }
+        ]
+      }
+    ]
+  }
+]
