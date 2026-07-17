@@ -91,12 +91,18 @@ class GridField:
 
 
 def fem_solve(inst, dim, device, L=4.0, n=None, T=0.3, dt=0.003,
-              return_timing=False):
+              return_timing=False, n_slices=0):
     """Forward Allen-Cahn IVP via FEM; returns a GridField for u(T, .).
 
     With ``return_timing=True`` also returns ``(t_mesh, t_solve)``: ``t_mesh`` is
     the mesh generation + basis/DOF setup + matrix assembly + factorisation cost
     (the setup a mesh-free BSDE solver never pays), ``t_solve`` the time-stepping.
+
+    With ``n_slices > 0`` also returns ``(slice_fields, slice_taus)``: ``n_slices``
+    GridFields of the forward solution ``u_forward`` sampled at evenly spaced
+    forward times ``sigma in [0, T]`` (mapped to ``tau = sigma / T`` in [0,1]).
+    These give the *true* space-time field for a controlled value_fn: the
+    terminal-value solution is ``w(t, .) = u_forward(T - t*T, .)``.
     """
     if n is None:
         n = 161 if dim == 2 else 33
@@ -120,24 +126,37 @@ def fem_solve(inst, dim, device, L=4.0, n=None, T=0.3, dt=0.003,
     dofs = basis.doflocs                      # [dim, Ndof]
     x0 = torch.tensor(dofs.T, dtype=torch.float32)
     u = inst.bound_fn(x0).squeeze(-1).numpy().astype(np.float64)
+    idx = np.rint((dofs + L) / (2 * L) * (n - 1)).astype(np.int64)  # [dim, Ndof]
+
+    def to_field(u_nodal):
+        grid = np.zeros((n,) * dim, dtype=np.float64)
+        grid[tuple(idx)] = u_nodal
+        return GridField(torch.tensor(grid, dtype=torch.float32), L, dim, device)
+
+    n_steps = int(round(T / dt))
+    slice_fields, slice_sigmas = [], []
+    if n_slices:
+        save_at = {int(round(j * n_steps / (n_slices - 1))) for j in range(n_slices)}
+        if 0 in save_at:
+            slice_fields.append(to_field(u)); slice_sigmas.append(0.0)
 
     t0 = time.perf_counter()
     lam = inst.lam
-    n_steps = int(round(T / dt))
-    for _ in range(n_steps):
+    for step in range(n_steps):
         reaction = lam * (u - u**3)           # group-FEM: nodal f(u)
         rhs = M @ u + dt * (M @ reaction)
         u = lu.solve(rhs)
+        if n_slices and (step + 1) in save_at:
+            slice_fields.append(to_field(u)); slice_sigmas.append((step + 1) * dt)
     t_solve = time.perf_counter() - t0
 
-    # scatter nodal values onto the regular grid [ix,iy(,iz)]
-    idx = np.rint((dofs + L) / (2 * L) * (n - 1)).astype(np.int64)  # [dim, Ndof]
-    grid = np.zeros((n,) * dim, dtype=np.float64)
-    grid[tuple(idx)] = u
-    field = GridField(torch.tensor(grid, dtype=torch.float32), L, dim, device)
+    field = to_field(u)
+    out = [field]
     if return_timing:
-        return field, t_mesh, t_solve
-    return field
+        out += [t_mesh, t_solve]
+    if n_slices:
+        out.append((slice_fields, [s / T for s in slice_sigmas]))   # taus in [0,1]
+    return out[0] if len(out) == 1 else tuple(out)
 
 
 def main():

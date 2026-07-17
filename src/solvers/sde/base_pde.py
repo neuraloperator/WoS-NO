@@ -252,6 +252,7 @@ def sample_allen_cahn_family(
     center_range: Tuple[float, float] = (-1.0, 1.0),
     lam_range: Tuple[float, float] = (0.5, 2.0),
     sigma: float = 2**0.5,
+    signed: bool = False,
     generator: torch.Generator = None,
 ) -> AllenCahnFamily:
     """Draw one random :class:`AllenCahnFamily` instance.
@@ -262,6 +263,14 @@ def sample_allen_cahn_family(
     not just the bump parameters. Because the operator sees ``g`` sampled on a
     point cloud (not the bump parameters), a variable bump count needs no change
     to the operator.
+
+    ``signed=True`` gives each bump a random +/- sign, so ``g`` takes both signs
+    and the solution develops genuine Allen-Cahn *interfaces* between the
+    ``u=+1`` and ``u=-1`` phases. This is required at long horizons: with only
+    positive ``g`` the strong accumulated reaction pulls every instance to the
+    single ``u=+1`` attractor, collapsing the solution map to a constant
+    (``w(0,.) ~ 1`` regardless of ``g``); signed ``g`` keeps the map
+    ``g -> w`` non-degenerate. See :func:`rescale_to_unit_horizon`.
 
     Amplitude / offset ranges are chosen so the terminal ``g`` (single-bump
     peak ``~ amp / offset``, mildly higher where bumps overlap) reaches ~0.8-1.1:
@@ -288,6 +297,10 @@ def sample_allen_cahn_family(
     # in the controlled ~<=1 regime (p90 peak ~1.0) instead of climbing with the
     # bump count. Empirically tuned to keep the FEM<->BSDE agreement.
     amps = _u(*amp_range, (n_bumps,)) * (2.0 / n_bumps) ** 0.75
+    if signed:
+        signs = torch.where(
+            torch.rand(n_bumps, generator=generator) < 0.5, -1.0, 1.0)
+        amps = amps * signs
     offsets = _u(*offset_range, (n_bumps,))
     widths = _u(*width_range, (n_bumps,))
     lam = float(_u(*lam_range, (1,)).item())
@@ -299,6 +312,35 @@ def sample_allen_cahn_family(
         widths=widths,
         lam=lam,
         sigma=sigma,
+    )
+
+
+def rescale_to_unit_horizon(inst: "AllenCahnFamily", T: float) -> "AllenCahnFamily":
+    """Diffusive rescaling of a horizon-``T`` instance to a unit horizon.
+
+    With ``tau = t / T`` and ``xi = x / sqrt(T)`` the Allen-Cahn terminal-value
+    problem on ``[0, T]`` maps to an equivalent problem on ``[0, 1]``::
+
+        d_tau w + Lap_xi w + (T lam)(w - w^3) = 0,   w(1, xi) = g(sqrt(T) xi)
+
+    (diffusion unchanged: ``dxi = sqrt(2) dW_tau``). The returned instance is
+    that unit-horizon problem, so training/solving runs with ``horizon=1`` and a
+    handful of steps regardless of how large ``T`` is -- the physical horizon
+    enters only through the amplified reaction ``T lam`` and the rescaled ``g``.
+
+    ``g(sqrt(T) xi) = sum_k a_k / (b_k + w_k T ||xi - c_k / sqrt(T)||^2)``, i.e.
+    ``centers -> c_k / sqrt(T)``, ``widths -> w_k T``, ``amps``/``offsets`` kept.
+    The physical solution is recovered by ``w(t, x) = w_tilde(t / T, x / sqrt(T))``.
+    """
+    s = T ** 0.5
+    return AllenCahnFamily(
+        n_dim=inst.n_dim,
+        centers=inst.centers / s,
+        amps=inst.amps,
+        offsets=inst.offsets,
+        widths=inst.widths * T,
+        lam=inst.lam * T,
+        sigma=inst.sigma,
     )
 
 
