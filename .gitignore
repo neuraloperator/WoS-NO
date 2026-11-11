@@ -1,4 +1,17 @@
 __pycache__/
 *.py[cod]
 wandb
-scripts
+
+# run outputs (large, machine-specific)
+checkpoints*/
+logs/
+scripts/*.json
+scripts/*.pt
+scripts/run_*.sh
+scripts/contended_*/
+
+# paper sources / manuscript copies kept locally
+6a09219ebfaaffbdc97c6e74/
+
+# generated write-ups, tables and figures (kept locally)
+docs/

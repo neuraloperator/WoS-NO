@@ -12,9 +12,11 @@ mode: elliptic        # {elliptic, parabolic}
 n_traj: 128           # Monte-Carlo paths per query point
 max_step: 2000        # max Euler-Maruyama steps (elliptic walk length cap)
 time_step: 0.005      # Euler-Maruyama dt; smaller reduces O(sqrt(dt)) bias
-sigma: 1.41421356     # sqrt(2): recovers the -Laplacian normalisation
+sigma: null           # null -> take it from the PDE (pde.sigma)
 horizon: null         # parabolic only: integration horizon T (null = elliptic)
 n_traj_max_per_shard: 128
+
+antithetic: true          # sign-flipped increment pairs; unbiased variance cut
 
 dim: 2
 boundary_first: true

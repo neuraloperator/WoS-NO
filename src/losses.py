@@ -875,14 +875,16 @@ class BSDELoss(object):
         n_traj: int = 128,
         max_step: int = 1000,
         time_step: float = 1e-2,
-        sigma: float = 2**0.5,
+        sigma: float = None,
         horizon: float = None,
         n_traj_max_per_shard: int = None,
+        antithetic: bool = True,
         pde=None,
         dim: int = 2,
         base_loss=F.mse_loss,
         boundary_first: bool = True,
         value_fn=None,
+        grad_fn=None,
     ):
         super().__init__()
         self.interior_weight = interior_weight
@@ -891,9 +893,16 @@ class BSDELoss(object):
         self.boundary_first = boundary_first
         # value function w(t, x) along the paths, required for *semilinear*
         # (nonlinear) PDEs whose target is a nonlinear Feynman-Kac estimate
-        # (e.g. Allen-Cahn). Typically a detached pointwise wrapper around the
-        # model being trained, or a Picard iterate. Ignored for linear PDEs.
+        # (e.g. Allen-Cahn). Ignored for linear PDEs.
+        #
+        # It MUST be time-dependent: the reaction integrand is evaluated at the
+        # path's current time, so a time-frozen field biases the target by a
+        # factor that grows with the accumulated reaction lam * T (negligible
+        # below lam*T ~ 0.2, order-1 above lam*T ~ 4).
         self.value_fn = value_fn
+        # optional control variate (t, x) -> grad_x w; removes most of the
+        # estimator variance without changing its mean
+        self.grad_fn = grad_fn
 
         if pde is None:
             pde = BoxPoissonPDE(n_dim=dim)
@@ -907,6 +916,7 @@ class BSDELoss(object):
             mode=mode,
             horizon=horizon,
             n_traj_max_per_shard=n_traj_max_per_shard,
+            antithetic=antithetic,
         )
 
     @staticmethod
@@ -932,16 +942,18 @@ class BSDELoss(object):
 
         # For a nonlinear (semilinear) PDE the target is a nonlinear
         # Feynman-Kac estimate that needs w(s, X_s) along the paths; use the
-        # value function (model / Picard iterate). A per-call value_fn kwarg
+        # (time-dependent) value function. A per-call value_fn / grad_fn kwarg
         # overrides the one set at construction.
         value_fn = kwargs.get("value_fn", self.value_fn)
+        grad_fn = kwargs.get("grad_fn", self.grad_fn)
 
         # Build the BSDE target by simulating SDE paths from the interior
         # query points. Detach: gradient must flow only through the operator
         # output, exactly as the WoS weak-supervision target is detached.
         with torch.no_grad():
             target = self.solver.evaluate(
-                coords_domain.detach(), value_fn=value_fn, evaluate_mode=True
+                coords_domain.detach(), value_fn=value_fn, grad_fn=grad_fn,
+                evaluate_mode=True,
             ).to(out_domain.device)
         target = target.reshape(out_domain.shape)
 

@@ -2,8 +2,9 @@
 #   d_t u = Laplacian(u) + u - u^3,   u(0,x) = g(x) = 1/(2 + 0.4||x||^2)
 # Terminal-value (BSDE) form via t -> T-t, solved by the *plain* nonlinear
 # Feynman-Kac representation (driver depends on u only, no Z/gradient network
-# -> not FBSDE). The path value w(s,X_s) is supplied by `value_fn` (the model
-# being trained, or a Picard iterate); set it from the training script.
+# -> not FBSDE). The path value w(s,X_s) is supplied by `value_fn`, set from the
+# training script; it must be TIME-DEPENDENT (a frozen field biases the target
+# by a factor growing with lam*T).
 # Reference (E, Han & Jentzen 2017): d=100, T=0.3 -> u(0,0) ~= 0.0528.
 _target_: src.losses.BSDELoss
 
@@ -16,6 +17,9 @@ time_step: 0.015          # dt = T/N with N = 20 steps (paper)
 horizon: 0.3              # terminal time T
 sigma: 1.41421356         # sqrt(2): generator = Laplacian (dX = sqrt(2) dW)
 n_traj_max_per_shard: 256
+
+# accuracy knobs (see src/solvers/sde/sde_solver.py).
+antithetic: true          # sign-flipped increment pairs; unbiased variance cut
 
 dim: 100
 boundary_first: true

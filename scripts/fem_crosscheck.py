@@ -25,6 +25,7 @@ Monte-Carlo target on query points near the origin.
 
 from __future__ import annotations
 
+import bisect
 import sys
 import types
 from pathlib import Path
@@ -166,9 +167,11 @@ def main():
         gen = torch.Generator().manual_seed(2024)
         rels, rmses = [], []
         n_inst = 8 if dim == 2 else 5
+        T = 0.3
         for i in range(n_inst):
             inst = sample_allen_cahn_family(n_dim=dim, n_bumps=(1, 8), generator=gen)
-            field = fem_solve(inst, dim, dev)
+            field, (slices, taus) = fem_solve(
+                inst, dim, dev, T=T, n_slices=41)
 
             # query points near origin (where the box boundary is irrelevant)
             xs = (torch.rand(200, dim, generator=gen) * 2 - 1).to(dev)
@@ -177,12 +180,22 @@ def main():
             # BSDE target with the FEM field as value_fn, so the driver reaction
             # along the path matches -> this isolates the *representation* error
             # (whole-space MC vs bounded FEM), not a self-training gap.
-            def value_fn(t, x, field=field):
-                return field(x)
+            #
+            # The reaction integrand needs w at the path's *current* time, so
+            # the value function must be the space-time field: with the forward
+            # slices u_forward(sigma, .) and w(t, .) = u_forward(T - t, .), the
+            # slice index is tau = 1 - t / T. Freezing it at w(0, .) instead is a
+            # bias that grows with the accumulated reaction lam * T.
+            def value_fn(t, x, slices=slices, taus=taus, T=T):
+                tau = min(max(1.0 - t / T, taus[0]), taus[-1])
+                j = min(max(bisect.bisect_right(taus, tau) - 1, 0), len(taus) - 2)
+                a = (tau - taus[j]) / (taus[j + 1] - taus[j])
+                return (1 - a) * slices[j](x) + a * slices[j + 1](x)
 
             solver = SDESolver(
-                pde=inst, n_traj=1024, time_step=0.015, horizon=0.3, sigma=2**0.5,
-                mode="parabolic", n_traj_max_per_shard=1024, device=dev,
+                pde=inst, n_traj=1024, time_step=0.015, horizon=T, sigma=2**0.5,
+                mode="parabolic", antithetic=True,
+                n_traj_max_per_shard=1024, device=dev,
             )
             bsde_vals = solver.evaluate(
                 xs, value_fn=value_fn, evaluate_mode=True

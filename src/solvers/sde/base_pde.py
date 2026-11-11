@@ -93,7 +93,7 @@ class SemilinearParabolicPDE(BasePDEEquation):
     only, not on its gradient (=Z), so no gradient/policy network is needed
     (this is what distinguishes it from the forward-backward deep-BSDE/FBSDE
     solver). The path value ``w(s, X_s)`` is supplied to the solver via
-    ``value_fn`` (the operator/MLP being trained, or a Picard iterate).
+    ``value_fn``, which must be time-dependent.
 
     Subclasses override :meth:`driver` (the reaction f) and :meth:`bound_fn`
     (the terminal data g).
@@ -157,6 +157,8 @@ class AllenCahnND(SemilinearParabolicPDE):
     def driver(self, t: float, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
         return y - y**3
 
+
+
     def bound_fn(self, x: torch.Tensor) -> torch.Tensor:
         r2 = (x**2).sum(dim=-1, keepdim=True)
         return 1.0 / (2.0 + 0.4 * r2)
@@ -212,6 +214,8 @@ class AllenCahnFamily(SemilinearParabolicPDE):
 
     def driver(self, t: float, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
         return self.lam * (y - y**3)
+
+
 
     def bound_fn(self, x: torch.Tensor) -> torch.Tensor:
         # g(x) = sum_k amp_k / (offset_k + width_k ||x - c_k||^2)
@@ -347,10 +351,14 @@ def rescale_to_unit_horizon(inst: "AllenCahnFamily", T: float) -> "AllenCahnFami
 class BoxPoissonPDE(BasePDEEquation):
     """``-Delta u = f`` on a box ``[lo, hi]^d`` with Dirichlet data.
 
-    Defaults reproduce the DeepRitz benchmark ``-Delta u = 2 d`` with
-    ``u = |x|^2`` on the boundary, whose exact solution is ``u(x) = |x|^2``.
+    Defaults give the quadratic test problem with exact solution
+    ``u(x) = |x|^2``: since ``Delta |x|^2 = 2 d``, the source in ``-Delta u = f``
+    form is ``f = -2 d``, and the Dirichlet data is ``g = |x|^2``.
+
     Override ``source_fn`` / ``boundary_fn`` (callables taking ``x``) to plug in
-    a different instance without subclassing.
+    a different instance without subclassing. ``source_fn`` must return ``f`` in
+    the ``-Delta u = f`` convention that :class:`~src.solvers.sde.SDESolver`
+    assumes in elliptic mode.
     """
 
     def __init__(
@@ -369,7 +377,8 @@ class BoxPoissonPDE(BasePDEEquation):
     def domain_fn(self, x: torch.Tensor) -> torch.Tensor:
         if self._source_fn is not None:
             return self._source_fn(x)
-        return 2.0 * self.n_dim * torch.ones([x.shape[0], 1], device=x.device)
+        # f = -Delta u = -2d for the exact solution u = |x|^2
+        return -2.0 * self.n_dim * torch.ones([x.shape[0], 1], device=x.device)
 
     def bound_fn(self, x: torch.Tensor) -> torch.Tensor:
         if self._boundary_fn is not None:

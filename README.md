@@ -209,7 +209,7 @@ The SDE solver hyperparameters (`n_traj`, `time_step`, `sigma`, `horizon`) and t
 
 #### Nonlinear PDEs (Allen-Cahn)
 
-The solver also supports **semilinear parabolic** PDEs through the nonlinear Feynman–Kac representation, e.g. the Allen-Cahn equation $\partial_t u = \Delta u + u - u^3$ (`configs/loss/bsde_allen_cahn.yaml`, `src/solvers/sde/AllenCahnND`). The reaction driver $f(u)=u-u^3$ depends on $u$ only — not on $\nabla u$ — so this is a **plain BSDE** (no gradient/policy network), not a forward-backward (FBSDE) deep-BSDE solver. The value $w(s,X_s)$ along each path is supplied by a `value_fn(t, x)` callable: the model being trained (weak supervision) or a Picard iterate. With $d=100$, $T=0.3$, $g(x)=1/(2+0.4\lVert x\rVert^2)$, this reproduces the E–Han–Jentzen benchmark ($u(0,0)\approx 0.0528$).
+The solver also supports **semilinear parabolic** PDEs through the nonlinear Feynman–Kac representation, e.g. the Allen-Cahn equation $\partial_t u = \Delta u + u - u^3$ (`configs/loss/bsde_allen_cahn.yaml`, `src/solvers/sde/AllenCahnND`). The reaction driver $f(u)=u-u^3$ depends on $u$ only — not on $\nabla u$ — so this is a **plain BSDE** (no gradient/policy network), not a forward-backward (FBSDE) deep-BSDE solver. The value $w(s,X_s)$ along each path is supplied by a `value_fn(t, x)` callable — the model being trained (weak supervision). It must be genuinely time-dependent: a time-frozen field biases the reaction integral by a factor that grows with the accumulated reaction $\lambda T$. With $d=100$, $T=0.3$, $g(x)=1/(2+0.4\lVert x\rVert^2)$, this reproduces the E–Han–Jentzen benchmark ($u(0,0)\approx 0.0528$).
 
 🐛 Known Issues
 3D Stability: The 3D implementation has not been extensively tested and may require hyperparameter tuning.
