@@ -3,7 +3,7 @@
 <div id="user-content-toc">
   <ul align="center" style="list-style: none;">
     <summary>
-      <h1>WoS-NO: Walk-on-Spheres Neural Operator</h1>
+      <h1>WS-NO: Weakly Supervised Neural Operator</h1>
     </summary>
   </ul>
 </div>
@@ -21,7 +21,7 @@
 <br><br>
 <img src="assets/WosGino.png" width="800px" alt="WoS-GINO Pipeline"/>
 <br>
-<em>The WoS-NO Pipeline leveraging stochastic random walks for weak supervision.</em>
+<em>The WS-NO Pipeline leveraging stochastic weak supervision.</em>
 <br><br>
 
 <div id="toc">
@@ -40,9 +40,9 @@
 
 Training neural PDE solvers is often bottlenecked by expensive data generation or unstable physics-informed neural network (PINN) that involves challenging optimization landscapes due to higher-order derivatives. To tackle this issue, we propose an alternative approach using Monte Carlo approaches to estimate the solution to the PDE as a stochastic process for weak supervision during training.
 
-Recently, an efficient discretization-free Monte-Carlo algorithm called **Walk-on-Spheres (WoS)** has been popularized for solving PDEs using random walks. Leveraging this, we introduce a learning scheme called **Walk-on-Spheres Neural Operator (WoS-NO)** which uses weak supervision from WoS to train any given neural operator. 
+We introduce a learning scheme called **Weakly Supervised Neural Operator (WS-NO)** which uses weak supervision from stochastic approaches to train any given neural operator. 
 
-The central principle of our method is to amortize the cost of Monte Carlo walks across the distribution of PDE instances. Our method leverages stochastic representations using the WoS algorithm to generate cheap, noisy, yet unbiased estimates of the PDE solution during training. This is formulated into a data-free physics-informed objective where a neural operator is trained to regress against these weak supervisions. Leveraging the unbiased nature of these estimates, the operator learns a generalized solution map for an entire family of PDEs.
+The central principle of our method is to amortize the cost of Monte Carlo walks across the distribution of PDE instances. Our method leverages stochastic representations to generate cheap, noisy, yet unbiased estimates of the PDE solution during training. This is formulated into a data-free physics-informed objective where a neural operator is trained to regress against these weak supervisions. Leveraging the unbiased nature of these estimates, the operator learns a generalized solution map for an entire family of PDEs.
 
 This strategy results in a **mesh-free framework** that operates without expensive pre-computed datasets, avoids the need for computing higher-order derivatives for loss functions that are memory-intensive and unstable, and demonstrates zero-shot generalization to novel PDE parameters and domains. Experiments show that for the same number of training steps, our method exhibits up to **8.75× improvement in $L_2$-error** compared to standard physics-informed training schemes, up to **6.31× improvement in training speed**, and reductions of up to **2.97× in GPU memory consumption**.
 
