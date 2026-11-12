@@ -15,6 +15,10 @@ except ImportError:
     PINOCombinedLoss = None
     create_pino_loss = None
 
+# BSDE / SDE weak-supervision loss (ported from the neural walk-on-spheres
+# codebase, https://github.com/bizoffermark/neural_wos)
+from .solvers.sde import SDESolver, BoxPoissonPDE
+
 
 def diffusion(x, gradient=False, laplacian=False):
     """Computes the diffusion coefficient and optionally its gradient and Laplacian."""
@@ -816,3 +820,160 @@ class NonlinearDeepRitzLoss(object):
 #         wos_loss = self.wos_weight * self.wos_loss(out['domain'], y['domain'])
 
 #         return pino_loss + wos_loss
+
+
+class BSDELoss(object):
+    """Backward-SDE (BSDE) weak-supervision loss.
+
+    Ported from ``SDELoss`` in the neural walk-on-spheres codebase
+    (https://github.com/bizoffermark/neural_wos) and adapted to the WoS-NO
+    neural-operator training loop.
+
+    Instead of regressing the operator output against a *pre-computed*
+    Walk-on-Spheres estimate (as the ``LpLoss`` weak-supervision path does),
+    this loss generates the supervision target *on the fly* by simulating
+    Euler-Maruyama SDE paths through :class:`~src.solvers.sde.SDESolver`:
+
+        * ``mode="elliptic"``  -> hitting-time stochastic representation,
+          equivalent in spirit to the WoS estimate but valid for screened
+          Poisson / Laplace problems;
+        * ``mode="parabolic"`` -> fixed-horizon Feynman-Kac representation,
+          which extends weak supervision to time-dependent (parabolic) PDEs
+          that the elliptic WoS estimator cannot express.
+
+    The Monte-Carlo target is unbiased, so the operator learns the solution
+    map by regressing against it. The query layout follows the rest of the
+    codebase: ``output_queries`` and ``out`` stack boundary points first
+    (``boundary_first=True``) followed by interior points.
+
+    Parameters
+    ----------
+    interior_weight, boundary_weight : float
+        weights for the interior (BSDE) and boundary regression terms.
+    mode : {"elliptic", "parabolic"}
+        stochastic representation used to build the target.
+    n_traj, max_step, time_step, sigma, horizon : SDE solver hyper-parameters
+        forwarded to :class:`SDESolver`. ``horizon`` is only used by
+        ``mode="parabolic"``.
+    pde : BasePDEEquation, optional
+        analytic PDE providing ``domain_fn`` (source), ``bound_fn`` (Dirichlet
+        / terminal data) and the geometry callables the walker needs. Defaults
+        to a :class:`BoxPoissonPDE`. Inject a per-instance PDE (or one carrying
+        ``source_fn`` / ``boundary_fn`` closures) to supervise a specific
+        family member.
+    base_loss : Callable
+        pointwise distance, default ``F.mse_loss`` (matches ``SDELoss``).
+    boundary_first : bool
+        whether boundary points precede interior points in the query ordering.
+    """
+
+    def __init__(
+        self,
+        interior_weight: float = 1.0,
+        boundary_weight: float = 1.0,
+        mode: str = "elliptic",
+        n_traj: int = 128,
+        max_step: int = 1000,
+        time_step: float = 1e-2,
+        sigma: float = None,
+        horizon: float = None,
+        n_traj_max_per_shard: int = None,
+        antithetic: bool = True,
+        pde=None,
+        dim: int = 2,
+        base_loss=F.mse_loss,
+        boundary_first: bool = True,
+        value_fn=None,
+        grad_fn=None,
+    ):
+        super().__init__()
+        self.interior_weight = interior_weight
+        self.boundary_weight = boundary_weight
+        self.base_loss = base_loss
+        self.boundary_first = boundary_first
+        # value function w(t, x) along the paths, required for *semilinear*
+        # (nonlinear) PDEs whose target is a nonlinear Feynman-Kac estimate
+        # (e.g. Allen-Cahn). Ignored for linear PDEs.
+        #
+        # It MUST be time-dependent: the reaction integrand is evaluated at the
+        # path's current time, so a time-frozen field biases the target by a
+        # factor that grows with the accumulated reaction lam * T (negligible
+        # below lam*T ~ 0.2, order-1 above lam*T ~ 4).
+        self.value_fn = value_fn
+        # optional control variate (t, x) -> grad_x w; removes most of the
+        # estimator variance without changing its mean
+        self.grad_fn = grad_fn
+
+        if pde is None:
+            pde = BoxPoissonPDE(n_dim=dim)
+        self.pde = pde
+        self.solver = SDESolver(
+            pde=pde,
+            n_traj=n_traj,
+            max_step=max_step,
+            time_step=time_step,
+            sigma=sigma,
+            mode=mode,
+            horizon=horizon,
+            n_traj_max_per_shard=n_traj_max_per_shard,
+            antithetic=antithetic,
+        )
+
+    @staticmethod
+    def _to_int(num_boundary):
+        if torch.is_tensor(num_boundary):
+            return int(num_boundary.item())
+        return int(num_boundary)
+
+    def _split(self, tensor, num_boundary):
+        """Split a ``[1, N, C]`` (or ``[N, C]``) tensor into boundary/interior."""
+        if tensor.dim() == 3:
+            tensor = tensor.squeeze(0)
+        if self.boundary_first:
+            return tensor[:num_boundary], tensor[num_boundary:]
+        num_domain = tensor.shape[0] - num_boundary
+        return tensor[num_domain:], tensor[:num_domain]
+
+    def __call__(self, out, output_queries, num_boundary, y=None, **kwargs):
+        num_boundary = self._to_int(num_boundary)
+
+        _, out_domain = self._split(out, num_boundary)
+        coords_bound, coords_domain = self._split(output_queries, num_boundary)
+
+        # For a nonlinear (semilinear) PDE the target is a nonlinear
+        # Feynman-Kac estimate that needs w(s, X_s) along the paths; use the
+        # (time-dependent) value function. A per-call value_fn / grad_fn kwarg
+        # overrides the one set at construction.
+        value_fn = kwargs.get("value_fn", self.value_fn)
+        grad_fn = kwargs.get("grad_fn", self.grad_fn)
+
+        # Build the BSDE target by simulating SDE paths from the interior
+        # query points. Detach: gradient must flow only through the operator
+        # output, exactly as the WoS weak-supervision target is detached.
+        with torch.no_grad():
+            target = self.solver.evaluate(
+                coords_domain.detach(), value_fn=value_fn, grad_fn=grad_fn,
+                evaluate_mode=True,
+            ).to(out_domain.device)
+        target = target.reshape(out_domain.shape)
+
+        interior_loss = self.interior_weight * self.base_loss(out_domain, target)
+
+        if y is not None:
+            out_bound, _ = self._split(out, num_boundary)
+            y_bound, _ = self._split(y, num_boundary)
+            y_bound = y_bound.reshape(out_bound.shape)
+            boundary_loss = self.boundary_weight * self.base_loss(out_bound, y_bound)
+        else:
+            boundary_loss = torch.zeros((), device=out_domain.device)
+
+        total = interior_loss + boundary_loss
+        if kwargs.get("return_individual_losses", False):
+            return total, interior_loss, boundary_loss
+        return total
+
+    def __str__(self):
+        return (
+            f"BSDELoss(mode={self.solver.mode}, interior_weight="
+            f"{self.interior_weight}, boundary_weight={self.boundary_weight})"
+        )

@@ -1,0 +1,31 @@
+# BSDE / SDE weak-supervision loss.
+# Ported from the neural walk-on-spheres codebase (SDELoss + SDESolver).
+# Builds the supervision target on the fly by simulating Euler-Maruyama SDE
+# paths, supporting both elliptic (hitting-time) and parabolic (Feynman-Kac)
+# PDEs. Set mode=parabolic for time-dependent problems.
+_target_: src.losses.BSDELoss
+
+interior_weight: 1.0
+boundary_weight: 1.0
+
+mode: elliptic        # {elliptic, parabolic}
+n_traj: 128           # Monte-Carlo paths per query point
+max_step: 2000        # max Euler-Maruyama steps (elliptic walk length cap)
+time_step: 0.005      # Euler-Maruyama dt; smaller reduces O(sqrt(dt)) bias
+sigma: null           # null -> take it from the PDE (pde.sigma)
+horizon: null         # parabolic only: integration horizon T (null = elliptic)
+n_traj_max_per_shard: 128
+
+antithetic: true          # sign-flipped increment pairs; unbiased variance cut
+
+dim: 2
+boundary_first: true
+
+# Analytic PDE supplying the source / boundary callables the walker needs.
+# Swap in another BasePDEEquation (or pass source_fn / boundary_fn) to
+# supervise a different instance of the family.
+pde:
+  _target_: src.solvers.sde.BoxPoissonPDE
+  n_dim: 2
+  stop_tol: 0.001
+  min_max: [-1.0, 1.0]

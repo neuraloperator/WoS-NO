@@ -183,6 +183,34 @@ python -m scripts.main \
 > [!NOTE]
 > Regarding train=wos: Always pass the train=wos (or wos3d) flag if you do not want to compute the gradient with respect to inputs (BVC). Omitting it will result in significantly higher memory usage.
 
+### BSDE Weak Supervision (Parabolic / Elliptic PDEs)
+
+The `bsde` loss provides an alternative weak-supervision target generated on the fly by simulating Euler–Maruyama SDE paths, ported from the [neural walk-on-spheres](https://github.com/bizoffermark/neural_wos) codebase. It supports two stochastic representations:
+
+* **Elliptic** (`mode=elliptic`): a hitting-time representation for screened Poisson / Laplace problems, analogous to the Walk-on-Spheres estimate.
+* **Parabolic** (`mode=parabolic`): a fixed-horizon Feynman–Kac representation that extends weak supervision to time-dependent PDEs, which the elliptic estimator cannot express.
+
+```Bash
+# Elliptic weak supervision with the BSDE loss
+python -m scripts.main \
+    loss=bsde \
+    model=gino \
+    dataset=linear_poisson2d \
+    train=wos \
+    solver=wos2d
+
+# Time-dependent (parabolic) supervision via Feynman–Kac
+python -m scripts.main \
+    loss=bsde loss.mode=parabolic loss.horizon=0.5 \
+    model=gino dataset=linear_poisson2d train=wos solver=wos2d
+```
+
+The SDE solver hyperparameters (`n_traj`, `time_step`, `sigma`, `horizon`) and the source/boundary definition (the `pde` block) live in `configs/loss/bsde.yaml`. The `solver=wos2d` group remains the dataset's geometry/estimate provider; the BSDE loss carries its own path simulator independently. A smaller `time_step` reduces the estimator's $O(\sqrt{\Delta t})$ boundary-overshoot bias at the cost of longer walks.
+
+#### Nonlinear PDEs (Allen-Cahn)
+
+The solver also supports **semilinear parabolic** PDEs through the nonlinear Feynman–Kac representation, e.g. the Allen-Cahn equation $\partial_t u = \Delta u + u - u^3$ (`configs/loss/bsde_allen_cahn.yaml`, `src/solvers/sde/AllenCahnND`). The reaction driver $f(u)=u-u^3$ depends on $u$ only — not on $\nabla u$ — so this is a **plain BSDE** (no gradient/policy network), not a forward-backward (FBSDE) deep-BSDE solver. The value $w(s,X_s)$ along each path is supplied by a `value_fn(t, x)` callable — the model being trained (weak supervision). It must be genuinely time-dependent: a time-frozen field biases the reaction integral by a factor that grows with the accumulated reaction $\lambda T$. With $d=100$, $T=0.3$, $g(x)=1/(2+0.4\lVert x\rVert^2)$, this reproduces the E–Han–Jentzen benchmark ($u(0,0)\approx 0.0528$).
+
 🐛 Known Issues
 3D Stability: The 3D implementation has not been extensively tested and may require hyperparameter tuning.
 
