@@ -3,7 +3,7 @@
 <div id="user-content-toc">
   <ul align="center" style="list-style: none;">
     <summary>
-      <h1>WS-NO: Weakly Supervised Neural Operator</h1>
+      <h1>Weakly Supervised Neural Operator</h1>
     </summary>
   </ul>
 </div>
@@ -21,7 +21,7 @@
 <br><br>
 <img src="assets/WosGino.png" width="800px" alt="WoS-GINO Pipeline"/>
 <br>
-<em>The WS-NO Pipeline leveraging stochastic weak supervision.</em>
+<em>The Pipeline leveraging stochastic weak supervision.</em>
 <br><br>
 
 <div id="toc">
@@ -40,7 +40,7 @@
 
 Training neural PDE solvers is often bottlenecked by expensive data generation or unstable physics-informed neural network (PINN) that involves challenging optimization landscapes due to higher-order derivatives. To tackle this issue, we propose an alternative approach using Monte Carlo approaches to estimate the solution to the PDE as a stochastic process for weak supervision during training.
 
-We introduce a learning scheme called **Weakly Supervised Neural Operator (WS-NO)** which uses weak supervision from stochastic approaches to train any given neural operator. 
+We introduce a learning scheme called **Weakly Supervised Neural Operator** which uses weak supervision from stochastic approaches to train any given neural operator. 
 
 The central principle of our method is to amortize the cost of Monte Carlo walks across the distribution of PDE instances. Our method leverages stochastic representations to generate cheap, noisy, yet unbiased estimates of the PDE solution during training. This is formulated into a data-free physics-informed objective where a neural operator is trained to regress against these weak supervisions. Leveraging the unbiased nature of these estimates, the operator learns a generalized solution map for an entire family of PDEs.
 
@@ -49,7 +49,7 @@ This strategy results in a **mesh-free framework** that operates without expensi
 <div align="center">
   <img src="assets/WosGino.png" alt="WoS-GINO Pipeline" width="800"/>
   <br>
-  <em>Figure 1: The WoS-NO Pipeline leveraging stochastic random walks for weak supervision.</em>
+  <em>Figure 1: The Pipeline leveraging stochastic random walks for weak supervision.</em>
 </div>
 
 ---
